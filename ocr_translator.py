@@ -501,6 +501,8 @@ def hotkey_listener():
     win32gui.RegisterHotKey(None, 4, win32con.MOD_CONTROL | win32con.MOD_SHIFT, ord("P"))
     # Ctrl + Shift + M: 여러 영역 번역
     win32gui.RegisterHotKey(None, 5, win32con.MOD_CONTROL | win32con.MOD_SHIFT, ord("M"))
+    # Ctrl + Shift + R: 영역 표시 제거
+    win32gui.RegisterHotKey(None, 6, win32con.MOD_CONTROL | win32con.MOD_SHIFT, ord("R"))
     
     try:
         while True:
@@ -516,12 +518,15 @@ def hotkey_listener():
                     root.after(0, toggle_pause)
                 elif msg[1][2] == 5:  # Ctrl+Shift+M
                     root.after(0, start_multi_translate)
+                elif msg[1][2] == 6:  # Ctrl+Shift+R
+                    root.after(0, remove_region_display)
     finally:
         win32gui.UnregisterHotKey(None, 1)
         win32gui.UnregisterHotKey(None, 2)
         win32gui.UnregisterHotKey(None, 3)
         win32gui.UnregisterHotKey(None, 4)
         win32gui.UnregisterHotKey(None, 5)
+        win32gui.UnregisterHotKey(None, 6)
 
 # ==============================
 # 모드 전환
@@ -663,6 +668,13 @@ def main():
         root,
         text="📌 Ctrl + Shift + M: 여러 영역 번역 (모드에 따라 동작)",
         font=("Malgun Gothic", 10)
+    ).pack(anchor="w", padx=40)
+    
+    tk.Label(
+        root,
+        text="❌ Ctrl + Shift + R: 영역 표시 제거",
+        font=("Malgun Gothic", 10),
+        fg="red"
     ).pack(anchor="w", padx=40)
     
     tk.Label(
