@@ -599,7 +599,7 @@ def main():
     
     root = tk.Tk()
     root.title("OCR Translator - Enhanced")
-    root.geometry("500x420")
+    root.geometry("800x900")
     root.resizable(True, True)
     
     mode_select_translate = tk.BooleanVar(value=True)
