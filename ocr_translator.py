@@ -155,6 +155,12 @@ def remove_region_display():
             pass
         region_display = None
 
+def remove_all_displays():
+    """영역 표시와 번역 결과를 모두 제거"""
+    remove_region_display()
+    remove_overlay()
+    remove_multi_overlays()
+
 def show_region_display(regions, auto_mode=False, duration=None):
     """선택된 영역들을 화면에 표시"""
     global region_display
@@ -519,7 +525,7 @@ def hotkey_listener():
                 elif msg[1][2] == 5:  # Ctrl+Shift+M
                     root.after(0, start_multi_translate)
                 elif msg[1][2] == 6:  # Ctrl+Shift+R
-                    root.after(0, remove_region_display)
+                    root.after(0, remove_all_displays)
     finally:
         win32gui.UnregisterHotKey(None, 1)
         win32gui.UnregisterHotKey(None, 2)
@@ -672,7 +678,7 @@ def main():
     
     tk.Label(
         root,
-        text="❌ Ctrl + Shift + R: 영역 표시 제거",
+        text="❌ Ctrl + Shift + R: 영역 표시 및 번역 결과 모두 제거",
         font=("Malgun Gothic", 10),
         fg="red"
     ).pack(anchor="w", padx=40)
