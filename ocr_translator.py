@@ -155,7 +155,7 @@ def remove_region_display():
             pass
         region_display = None
 
-def show_region_display(regions):
+def show_region_display(regions, auto_mode=False, duration=None):
     """선택된 영역들을 화면에 표시"""
     global region_display
     
@@ -165,7 +165,14 @@ def show_region_display(regions):
     region_display.attributes("-alpha", 0.3)
     region_display.attributes("-fullscreen", True)
     region_display.attributes("-topmost", True)
-    region_display.overrideredirect(True)
+    
+    if auto_mode:
+        # 자동 모드: 이동 가능하도록 타이틀바 유지
+        region_display.overrideredirect(False)
+        region_display.title("선택 영역 표시 (이동/닫기 가능)")
+    else:
+        # 선택 모드: 타이틀바 없음
+        region_display.overrideredirect(True)
     
     canvas = tk.Canvas(region_display, bg="black", highlightthickness=0)
     canvas.pack(fill="both", expand=True)
@@ -181,11 +188,15 @@ def show_region_display(regions):
             outline="red", width=3
         )
     
-    # 클릭하면 표시 제거
-    def remove_on_click(e):
-        remove_region_display()
-    
-    canvas.bind("<Button-1>", remove_on_click)
+    if not auto_mode:
+        # 선택 모드: 클릭하면 표시 제거
+        def remove_on_click(e):
+            remove_region_display()
+        canvas.bind("<Button-1>", remove_on_click)
+        
+        # 선택 모드: 지정된 시간 후 자동 제거
+        if duration:
+            region_display.after(duration, remove_region_display)
 
 def show_or_update_overlay(text, region, auto=False):
     global current_overlay, overlay_label, last_text
@@ -298,6 +309,10 @@ def ocr_translate(region, auto=False, check_change=False):
     
     result = Translator().translate(text, src="en", dest="ko")
     show_or_update_overlay(result.text, region, auto)
+    
+    # 선택 번역 모드에서는 영역 표시도 함께 표시
+    if not auto:
+        show_region_display([region], auto_mode=False, duration=5000)
 
 # ==============================
 # 여러 영역 번역
@@ -307,6 +322,9 @@ def translate_multi_regions_once():
     global multi_regions, multi_overlays
     
     remove_multi_overlays()
+    
+    # 선택 모드에서는 영역 표시도 함께 (5초 후 자동 제거)
+    show_region_display(multi_regions, auto_mode=False, duration=5000)
     
     for region in multi_regions:
         screenshot = pyautogui.screenshot(region=region)
@@ -405,12 +423,10 @@ def start_multi_translate():
     if selector.selections:
         multi_regions = selector.selections
         
-        # 영역 표시
-        show_region_display(multi_regions)
-        
         # 모드에 따라 다르게 동작
         if mode_auto_translate.get():
-            # 자동 번역 모드: 계속 번역
+            # 자동 번역 모드: 계속 번역, 영역 표시 (이동/닫기 가능)
+            show_region_display(multi_regions, auto_mode=True)
             multi_auto_running = True
             my_id = multi_auto_session_id
             threading.Thread(
@@ -419,7 +435,7 @@ def start_multi_translate():
                 daemon=True
             ).start()
         else:
-            # 선택 번역 모드: 한 번만 번역
+            # 선택 번역 모드: 한 번만 번역, 영역 표시는 함수 내부에서 처리
             translate_multi_regions_once()
 
 # ==============================
@@ -434,6 +450,7 @@ def start_auto_translate():
     auto_session_id += 1
     last_image_hash = ""
     remove_overlay()
+    remove_region_display()
     
     selector = AreaSelector(root)
     root.wait_window(selector.root)
@@ -441,6 +458,10 @@ def start_auto_translate():
     if selector.selections:
         auto_region = selector.selections[0]
         auto_running = True
+        
+        # 자동 모드에서는 영역 표시 (이동/닫기 가능)
+        show_region_display([auto_region], auto_mode=True)
+        
         my_id = auto_session_id
         threading.Thread(
             target=auto_loop,
@@ -647,6 +668,13 @@ def main():
     tk.Label(
         root,
         text="\n※ 선택된 영역은 빨간 테두리로 표시됩니다",
+        font=("Malgun Gothic", 9),
+        fg="gray"
+    ).pack(anchor="w", padx=30)
+    
+    tk.Label(
+        root,
+        text="※ 선택 모드: 5초 후 자동 제거 | 자동 모드: 이동/닫기 가능",
         font=("Malgun Gothic", 9),
         fg="gray"
     ).pack(anchor="w", padx=30)
