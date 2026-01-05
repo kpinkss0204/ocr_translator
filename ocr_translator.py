@@ -36,6 +36,9 @@ last_text = ""
 last_image_hash = ""  # OCR 텍스트 변경 감지 최적화
 multi_regions = []  # 여러 영역 저장
 multi_overlays = []  # 여러 오버레이 저장
+multi_auto_running = False  # 여러 영역 자동 번역 실행 여부
+multi_auto_session_id = 0  # 여러 영역 자동 번역 세션 ID
+region_display = None  # 영역 표시 창
 
 # ==============================
 # 영역 선택 클래스
@@ -142,6 +145,47 @@ def remove_multi_overlays():
         except:
             pass
     multi_overlays = []
+
+def remove_region_display():
+    global region_display
+    if region_display:
+        try:
+            region_display.destroy()
+        except:
+            pass
+        region_display = None
+
+def show_region_display(regions):
+    """선택된 영역들을 화면에 표시"""
+    global region_display
+    
+    remove_region_display()
+    
+    region_display = tk.Toplevel(root)
+    region_display.attributes("-alpha", 0.3)
+    region_display.attributes("-fullscreen", True)
+    region_display.attributes("-topmost", True)
+    region_display.overrideredirect(True)
+    
+    canvas = tk.Canvas(region_display, bg="black", highlightthickness=0)
+    canvas.pack(fill="both", expand=True)
+    
+    # 투명한 배경 만들기
+    region_display.wm_attributes("-transparentcolor", "black")
+    
+    # 각 영역을 빨간 테두리로 표시
+    for region in regions:
+        left, top, width, height = region
+        canvas.create_rectangle(
+            left, top, left + width, top + height,
+            outline="red", width=3
+        )
+    
+    # 클릭하면 표시 제거
+    def remove_on_click(e):
+        remove_region_display()
+    
+    canvas.bind("<Button-1>", remove_on_click)
 
 def show_or_update_overlay(text, region, auto=False):
     global current_overlay, overlay_label, last_text
@@ -258,7 +302,8 @@ def ocr_translate(region, auto=False, check_change=False):
 # ==============================
 # 여러 영역 번역
 # ==============================
-def translate_multi_regions():
+def translate_multi_regions_once():
+    """여러 영역을 한 번만 번역 (선택 모드)"""
     global multi_regions, multi_overlays
     
     remove_multi_overlays()
@@ -275,6 +320,52 @@ def translate_multi_regions():
             result = Translator().translate(text, src="en", dest="ko")
             overlay = create_multi_overlay(result.text, region)
             multi_overlays.append(overlay)
+    
+    # 5초 후 자동으로 모든 오버레이 제거
+    if multi_overlays:
+        root.after(5000, remove_multi_overlays)
+
+def translate_multi_regions_auto(region_index):
+    """특정 영역을 자동으로 번역"""
+    if region_index >= len(multi_regions):
+        return
+    
+    region = multi_regions[region_index]
+    screenshot = pyautogui.screenshot(region=region)
+    text = pytesseract.image_to_string(
+        screenshot,
+        lang="eng",
+        config="--psm 6"
+    ).strip()
+    
+    if text:
+        result = Translator().translate(text, src="en", dest="ko")
+        
+        # 해당 인덱스의 오버레이 업데이트
+        if region_index < len(multi_overlays) and multi_overlays[region_index]:
+            try:
+                # 기존 오버레이의 라벨만 업데이트
+                for widget in multi_overlays[region_index].winfo_children():
+                    if isinstance(widget, tk.Label):
+                        widget.config(text=result.text)
+            except:
+                pass
+
+def multi_auto_loop(my_session_id):
+    """여러 영역을 자동으로 계속 번역 (자동 모드)"""
+    global multi_auto_running, multi_regions, multi_overlays
+    
+    # 초기 오버레이 생성
+    if not multi_overlays:
+        for region in multi_regions:
+            overlay = create_multi_overlay("번역 중...", region)
+            multi_overlays.append(overlay)
+    
+    while multi_auto_running and my_session_id == multi_auto_session_id:
+        if not auto_paused:
+            for i in range(len(multi_regions)):
+                translate_multi_regions_auto(i)
+        time.sleep(1)
 
 # ==============================
 # 자동 번역 루프
@@ -300,14 +391,36 @@ def start_select_translate():
 # 여러 영역 선택
 # ==============================
 def start_multi_translate():
-    global multi_regions
+    global multi_regions, multi_auto_running, multi_auto_session_id
+    
+    # 기존 실행 중단
+    multi_auto_running = False
+    multi_auto_session_id += 1
+    remove_multi_overlays()
+    remove_region_display()
     
     selector = AreaSelector(root, multi_mode=True)
     root.wait_window(selector.root)
     
     if selector.selections:
         multi_regions = selector.selections
-        translate_multi_regions()
+        
+        # 영역 표시
+        show_region_display(multi_regions)
+        
+        # 모드에 따라 다르게 동작
+        if mode_auto_translate.get():
+            # 자동 번역 모드: 계속 번역
+            multi_auto_running = True
+            my_id = multi_auto_session_id
+            threading.Thread(
+                target=multi_auto_loop,
+                args=(my_id,),
+                daemon=True
+            ).start()
+        else:
+            # 선택 번역 모드: 한 번만 번역
+            translate_multi_regions_once()
 
 # ==============================
 # 자동 번역 시작
@@ -394,12 +507,20 @@ def hotkey_listener():
 # ==============================
 def stop_auto():
     global auto_running, auto_region, auto_session_id, auto_paused, last_image_hash
+    global multi_auto_running, multi_auto_session_id
+    
     auto_running = False
     auto_paused = False
     auto_region = None
     auto_session_id += 1
     last_image_hash = ""
+    
+    multi_auto_running = False
+    multi_auto_session_id += 1
+    
     remove_overlay()
+    remove_multi_overlays()
+    remove_region_display()
 
 def switch_to_select_mode():
     """선택 번역 모드로 전환만"""
@@ -423,17 +544,20 @@ def execute_current_mode():
         start_select_translate()
 
 def toggle_select_mode():
-    stop_auto()
-    if not mode_select_translate.get():
-        mode_select_translate.set(True)
+    """체크박스로 선택 모드 전환"""
+    if mode_select_translate.get():
+        stop_auto()
         mode_auto_translate.set(False)
-
-def toggle_auto_mode():
-    stop_auto()
-    if mode_auto_translate.get():
-        mode_select_translate.set(False)
     else:
         mode_select_translate.set(True)
+
+def toggle_auto_mode():
+    """체크박스로 자동 모드 전환"""
+    if mode_auto_translate.get():
+        stop_auto()
+        mode_select_translate.set(False)
+    else:
+        mode_auto_translate.set(True)
 
 # ==============================
 # 메인 GUI
@@ -459,14 +583,16 @@ def main():
         root,
         text="선택 번역 모드 (한 번만 번역)",
         variable=mode_select_translate,
-        command=toggle_select_mode
+        command=toggle_select_mode,
+        font=("Malgun Gothic", 10)
     ).pack(anchor="w", padx=30)
     
     tk.Checkbutton(
         root,
         text="자동 번역 모드 (1초마다 계속 번역)",
         variable=mode_auto_translate,
-        command=toggle_auto_mode
+        command=toggle_auto_mode,
+        font=("Malgun Gothic", 10)
     ).pack(anchor="w", padx=30, pady=5)
     
     tk.Label(
@@ -514,9 +640,16 @@ def main():
     
     tk.Label(
         root,
-        text="📌 Ctrl + Shift + M: 여러 영역 자동 번역",
+        text="📌 Ctrl + Shift + M: 여러 영역 번역 (모드에 따라 동작)",
         font=("Malgun Gothic", 10)
     ).pack(anchor="w", padx=40)
+    
+    tk.Label(
+        root,
+        text="\n※ 선택된 영역은 빨간 테두리로 표시됩니다",
+        font=("Malgun Gothic", 9),
+        fg="gray"
+    ).pack(anchor="w", padx=30)
     
     tk.Label(
         root,
