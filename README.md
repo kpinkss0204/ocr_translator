@@ -1,4 +1,44 @@
-1. Tesseract OCR 설치
+# 번역기 Pro (Anti-Noise)
 
-python -m PyInstaller --onefile --noconsole --clean --collect-all pywin32 --name OCRTranslator ocr_translator.py
-실행 하여 exe 파일로 변환
+## 개요
+**고속 번역기 Pro**는 화면의 특정 영역을 OCR(문자 인식)으로 읽어 실시간으로 번역해주는 도구입니다.  
+노이즈 필터링과 신뢰도 기반 OCR 처리를 적용하여 불필요한 글자를 제거하고 정확한 번역 결과를 제공합니다.  
+
+- 단일 영역 선택 번역 (1회성)  
+- 다중 영역 번역  
+- 자동 실시간 번역 루프  
+- 드래그 가능한 번역 결과 오버레이  
+- 신뢰도 기반 노이즈 필터링  
+
+---
+
+## 기능
+
+### 1. OCR & 번역
+- `pytesseract` 기반 OCR 처리  
+- `deep_translator`의 GoogleTranslator 사용  
+- 신뢰도(`confidence`)와 정규표현식 필터링으로 노이즈 제거  
+- 선택 영역 또는 지정된 다중 영역을 번역 가능  
+
+### 2. 화면 영역 선택
+- 마우스로 드래그하여 번역 영역 지정  
+- 다중 영역 선택 가능  
+- 선택 영역 표시 및 자동 업데이트  
+
+### 3. 오버레이 표시
+- 번역 결과를 화면에 투명 오버레이로 표시  
+- 오버레이 이동 가능 (드래그 지원)  
+- 자동 또는 수동으로 제거 가능  
+
+### 4. 자동 번역 모드
+- 지정 영역을 반복 캡처하여 실시간 번역  
+- 신뢰도와 이미지 변경 감지로 불필요한 재번역 방지  
+- 일시정지 기능 지원  
+
+---
+
+## 설치
+
+### 필수 패키지
+```bash
+pip install pytesseract pillow mss numpy deep-translator pywin32
